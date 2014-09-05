@@ -20,21 +20,21 @@ index 58ad8ed..0b06f3e 100644
  
  const (
 diff --git a/integration-cli/docker_api_containers_test.go b/integration-cli/docker_api_containers_test.go
-index 5dce388..fca39c4 100644
+index b147721..1e8e093 100644
 --- a/integration-cli/docker_api_containers_test.go
 +++ b/integration-cli/docker_api_containers_test.go
-@@ -11,8 +11,8 @@ import (
+@@ -9,8 +9,8 @@ import (
  	"testing"
  	"time"
  
 +	"archive/tar"
- 	"github.com/docker/docker/api/stats"
+ 	"github.com/docker/docker/api/types"
 -	"github.com/docker/docker/vendor/src/code.google.com/p/go/src/pkg/archive/tar"
  )
  
  func TestContainerApiGetAll(t *testing.T) {
 diff --git a/integration-cli/docker_cli_push_test.go b/integration-cli/docker_cli_push_test.go
-index bcab531..2b5aa4b 100644
+index ee1c2bc..2b8b4e5 100644
 --- a/integration-cli/docker_cli_push_test.go
 +++ b/integration-cli/docker_cli_push_test.go
 @@ -9,7 +9,7 @@ import (
@@ -47,10 +47,10 @@ index bcab531..2b5aa4b 100644
  
  // pulling an image from the central registry should work
 diff --git a/integration-cli/utils.go b/integration-cli/utils.go
-index f67ee78..77c5720 100644
+index c9b4dcc..ebeace2 100644
 --- a/integration-cli/utils.go
 +++ b/integration-cli/utils.go
-@@ -15,7 +15,7 @@ import (
+@@ -17,7 +17,7 @@ import (
  	"syscall"
  	"time"
  
@@ -60,16 +60,17 @@ index f67ee78..77c5720 100644
  
  func getExitCode(err error) (int, error) {
 diff --git a/integration/api_test.go b/integration/api_test.go
-index ab2c307..a520355 100644
+index e978c31..840855b 100644
 --- a/integration/api_test.go
 +++ b/integration/api_test.go
-@@ -14,11 +14,11 @@ import (
+@@ -14,12 +14,12 @@ import (
  	"testing"
  	"time"
  
 +	"archive/tar"
  	"github.com/docker/docker/api"
  	"github.com/docker/docker/api/server"
+ 	"github.com/docker/docker/builder"
  	"github.com/docker/docker/engine"
  	"github.com/docker/docker/runconfig"
 -	"github.com/docker/docker/vendor/src/code.google.com/p/go/src/pkg/archive/tar"
@@ -77,7 +78,7 @@ index ab2c307..a520355 100644
  
  func TestSaveImageAndThenLoad(t *testing.T) {
 diff --git a/integration/utils_test.go b/integration/utils_test.go
-index 32ca8e0..a283597 100644
+index d5a068f..7d3cfea 100644
 --- a/integration/utils_test.go
 +++ b/integration/utils_test.go
 @@ -14,7 +14,7 @@ import (
@@ -90,7 +91,7 @@ index 32ca8e0..a283597 100644
  	"github.com/docker/docker/builtins"
  	"github.com/docker/docker/daemon"
 diff --git a/pkg/archive/archive.go b/pkg/archive/archive.go
-index 68e5c1d..b54bad3 100644
+index bce66a5..e3be92e 100644
 --- a/pkg/archive/archive.go
 +++ b/pkg/archive/archive.go
 @@ -16,7 +16,7 @@ import (
@@ -116,7 +117,7 @@ index 6cd95d5..dbe8d5e 100644
  
  func TestCmdStreamLargeStderr(t *testing.T) {
 diff --git a/pkg/archive/archive_unix.go b/pkg/archive/archive_unix.go
-index c0e8aee..dd1b767 100644
+index 8c7079f..0f45d06 100644
 --- a/pkg/archive/archive_unix.go
 +++ b/pkg/archive/archive_unix.go
 @@ -6,7 +6,7 @@ import (
@@ -127,25 +128,25 @@ index c0e8aee..dd1b767 100644
 +	"archive/tar"
  )
  
- func setHeaderForSpecialDevice(hdr *tar.Header, ta *tarAppender, name string, stat interface{}) (nlink uint32, inode uint64, err error) {
+ // canonicalTarNameForPath returns platform-specific filepath
 diff --git a/pkg/archive/archive_windows.go b/pkg/archive/archive_windows.go
-index 3cc2493..6312df3 100644
+index b95aa17..04190bd 100644
 --- a/pkg/archive/archive_windows.go
 +++ b/pkg/archive/archive_windows.go
-@@ -3,7 +3,7 @@
- package archive
+@@ -6,7 +6,7 @@ import (
+ 	"fmt"
+ 	"strings"
  
- import (
 -	"github.com/docker/docker/vendor/src/code.google.com/p/go/src/pkg/archive/tar"
 +	"archive/tar"
  )
  
- func setHeaderForSpecialDevice(hdr *tar.Header, ta *tarAppender, name string, stat interface{}) (nlink uint32, inode uint64, err error) {
+ // canonicalTarNameForPath returns platform-specific filepath
 diff --git a/pkg/archive/changes.go b/pkg/archive/changes.go
-index 85217f6..bc67e90 100644
+index 9f16b76..d31fa92 100644
 --- a/pkg/archive/changes.go
 +++ b/pkg/archive/changes.go
-@@ -10,7 +10,7 @@ import (
+@@ -11,7 +11,7 @@ import (
  	"syscall"
  	"time"
  
@@ -155,7 +156,7 @@ index 85217f6..bc67e90 100644
  	log "github.com/Sirupsen/logrus"
  	"github.com/docker/docker/pkg/pools"
 diff --git a/pkg/archive/diff.go b/pkg/archive/diff.go
-index ca28207..1e9b968 100644
+index b5eb63f..87e3ec4 100644
 --- a/pkg/archive/diff.go
 +++ b/pkg/archive/diff.go
 @@ -9,7 +9,7 @@ import (
