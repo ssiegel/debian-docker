@@ -1,3 +1,5 @@
+inspect-env.patch
+
 # Once upstream kills the archive/tar vendoring, remove this patch
 upstream-patched-archive-tar.patch
 

@@ -1,0 +1,12 @@
+--- a/daemon/container.go
++++ b/daemon/container.go
+@@ -1258,6 +1258,9 @@
+ 	env := []string{
+ 		"PATH=" + DefaultPathEnv,
+ 		"HOSTNAME=" + fullHostname,
++		"DOCKER_NAME=" + container.Name[map[bool]int{true:1}[container.Name[0]=='/']:],
++		"DOCKER_ID=" + container.ID,
++		"DOCKER_IMAGE=" + container.ImageID,
+ 		// Note: we don't set HOME here because it'll get autoset intelligently
+ 		// based on the value of USER inside dockerinit, but only if it isn't
+ 		// set already (ie, that can be overridden by setting HOME via -e or ENV
