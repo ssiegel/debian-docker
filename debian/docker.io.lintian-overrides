@@ -1,2 +1,4 @@
+docker.io binary: unstripped-binary-or-object usr/bin/docker
+docker.io binary: unstripped-binary-or-object usr/lib/docker.io/dockerinit
 docker.io binary: statically-linked-binary usr/lib/docker.io/dockerinit
 # Yes, I assure you this is normal. Damnit, go.
