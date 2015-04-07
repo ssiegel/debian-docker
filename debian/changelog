@@ -1,3 +1,9 @@
+docker.io (1.6.0~rc5~dfsg1-1) experimental; urgency=low
+
+  * Update to 1.6.0-rc5 upstream release
+
+ -- Stefan Siegel <ssiegel@sdas.net>  Tue, 07 Apr 2015 04:43:16 +0200
+
 docker.io (1.6.0~rc4~dfsg1-1) experimental; urgency=low
 
   [ Tianon Gravi ]
