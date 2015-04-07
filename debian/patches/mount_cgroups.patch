@@ -1,0 +1,125 @@
+Mount cgroups in the container
+Original implementation in b441dfa, which was reverted by c7d1cb2.
+
+diff --git a/daemon/execdriver/native/create.go b/daemon/execdriver/native/create.go
+index a988fba..e24044f 100644
+--- a/daemon/execdriver/native/create.go
++++ b/daemon/execdriver/native/create.go
+@@ -38,7 +38,7 @@ func (d *driver) createContainer(c *execdriver.Command) (*configs.Config, error)
+ 	if c.ProcessConfig.Privileged {
+ 		// clear readonly for /sys
+ 		for i := range container.Mounts {
+-			if container.Mounts[i].Destination == "/sys" {
++			if container.Mounts[i].Destination == "/sys" || container.Mounts[i].Destination == "/sys/fs/cgroup" {
+ 				container.Mounts[i].Flags &= ^syscall.MS_RDONLY
+ 			}
+ 		}
+diff --git a/daemon/execdriver/native/template/default_template.go b/daemon/execdriver/native/template/default_template.go
+index 76e3cea..fb3c6a3 100644
+--- a/daemon/execdriver/native/template/default_template.go
++++ b/daemon/execdriver/native/template/default_template.go
+@@ -79,6 +79,12 @@ func New() *configs.Config {
+ 				Device:      "sysfs",
+ 				Flags:       defaultMountFlags | syscall.MS_RDONLY,
+ 			},
++			{
++				Source:      "cgroup",
++				Destination: "/sys/fs/cgroup",
++				Device:      "cgroup",
++				Flags:       syscall.MS_NOSUID | syscall.MS_NODEV | syscall.MS_NOEXEC | syscall.MS_RDONLY,
++			},
+ 		},
+ 		MaskPaths: []string{
+ 			"/proc/kcore",
+diff --git a/vendor/src/github.com/docker/libcontainer/rootfs_linux.go b/vendor/src/github.com/docker/libcontainer/rootfs_linux.go
+index ab1a9a5..a59523c 100644
+--- a/libcontainer/rootfs_linux.go
++++ b/libcontainer/rootfs_linux.go
+@@ -11,6 +11,7 @@ import (
+ 	"syscall"
+ 	"time"
+ 
++	"github.com/docker/libcontainer/cgroups"
+ 	"github.com/docker/libcontainer/configs"
+ 	"github.com/docker/libcontainer/label"
+ )
+@@ -126,6 +127,79 @@ func mountToRootfs(m *configs.Mount, rootfs, mountLabel string) error {
+ 				return err
+ 			}
+ 		}
++	case "cgroup":
++		readonly := m.Flags & syscall.MS_RDONLY != 0
++		mountflags := m.Flags & ^syscall.MS_RDONLY
++
++		// Mount all cgroup subsystems into the container, read-only. Create symlinks for each
++		// subsystem if any subsystems are merged
++		cgroupMounts, err := cgroups.GetCgroupMounts()
++		if err != nil {
++			return err
++		}
++
++		// Mount tmpfs to destination
++		if err := os.MkdirAll(dest, 0755); err != nil && !os.IsExist(err) {
++			return err
++		}
++		if err := syscall.Mount("tmpfs", dest, "tmpfs", uintptr(mountflags), ""); err != nil {
++			return err
++		}
++
++		for _, cgm := range cgroupMounts {
++			dir := filepath.Base(cgm.Mountpoint)
++			mountpoint := filepath.Join(dest, dir)
++
++			if err := os.MkdirAll(mountpoint, 0755); err != nil && !os.IsExist(err) {
++				return fmt.Errorf("mkdirall %s %s", mountpoint, err)
++			}
++
++			// Bind-mount the cgroup to /sys/fs/cgroup with the same name as the outer mount
++			if err := syscall.Mount(cgm.Mountpoint, mountpoint, "bind", uintptr(mountflags|syscall.MS_BIND), ""); err != nil {
++				return fmt.Errorf("mounting %s into %s %s", cgm.Mountpoint, mountpoint, err)
++			}
++			if readonly {
++				if err := syscall.Mount(cgm.Mountpoint, mountpoint, "bind", uintptr(mountflags|syscall.MS_BIND|syscall.MS_REMOUNT|syscall.MS_RDONLY), ""); err != nil {
++					return fmt.Errorf("remounting %s read-only %s", mountpoint, err)
++				}
++			}
++
++			hasName := false
++			for _, subsys := range cgm.Subsystems {
++				isName := strings.HasPrefix(subsys, "name=")
++				canonicalName := subsys
++				if isName {
++					hasName = true
++					canonicalName = subsys[5:]
++				}
++
++				// For the merged case dir will be something like "cpu,cpuacct", so
++				// we make symlinks for all the pure subsystem names "cpu -> cpu,cpuacct", etc
++				if canonicalName != dir {
++					if err := os.Symlink(dir, filepath.Join(dest, canonicalName)); err != nil {
++						return fmt.Errorf("creating cgroup symlink for %s: %s", dir, err)
++					}
++				}
++			}
++
++			// For named cgroups, such as name=systemd we mount a read-write subset at the
++			// current cgroup path. This lets e.g. systemd work inside a container, as it can create subcgroups inside the
++			// current cgroup, while not being able to do anything dangerous in the real cgroups
++			if hasName && readonly {
++				cgroupPath, _ := cgm.GetThisCgroupDir()
++				if cgroupPath != "" && cgroupPath != "/" {
++					if err := syscall.Mount(filepath.Join(cgm.Mountpoint, cgroupPath), filepath.Join(mountpoint, cgroupPath), "bind", uintptr(mountflags|syscall.MS_BIND), ""); err != nil {
++						return fmt.Errorf("mounting %s into %s %s", filepath.Join(cgm.Mountpoint, cgroupPath), filepath.Join(mountpoint, cgroupPath), err)
++					}
++				}
++			}
++		}
++
++		if readonly {
++			if err := syscall.Mount("tmpfs", dest, "tmpfs", uintptr(mountflags|syscall.MS_REMOUNT|syscall.MS_RDONLY), ""); err != nil {
++				return fmt.Errorf("remounting %s read-only %s", dest, err)
++			}
++		}
+ 	default:
+ 		return fmt.Errorf("unknown mount device %q to %q", m.Device, m.Destination)
+ 	}
