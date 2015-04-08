@@ -18,7 +18,7 @@ diff --git a/daemon/execdriver/native/template/default_template.go b/daemon/exec
 index 76e3cea..fb3c6a3 100644
 --- a/daemon/execdriver/native/template/default_template.go
 +++ b/daemon/execdriver/native/template/default_template.go
-@@ -79,6 +79,12 @@ func New() *configs.Config {
+@@ -79,6 +79,26 @@ func New() *configs.Config {
  				Device:      "sysfs",
  				Flags:       defaultMountFlags | syscall.MS_RDONLY,
  			},
@@ -27,6 +27,20 @@ index 76e3cea..fb3c6a3 100644
 +				Destination: "/sys/fs/cgroup",
 +				Device:      "cgroup",
 +				Flags:       syscall.MS_NOSUID | syscall.MS_NODEV | syscall.MS_NOEXEC | syscall.MS_RDONLY,
++			},
++			{
++				Source:      "tmpfs",
++				Destination: "/run",
++				Device:      "tmpfs",
++				Flags:       syscall.MS_NOSUID | syscall.MS_NODEV | syscall.MS_STRICTATIME,
++				Data:        "mode=755",
++			},
++			{
++				Source:      "tmpfs",
++				Destination: "/run/lock",
++				Device:      "tmpfs",
++				Flags:       syscall.MS_NOSUID | syscall.MS_NODEV | syscall.MS_NOEXEC,
++				Data:        "mode=1777,size=5242880",
 +			},
  		},
  		MaskPaths: []string{
