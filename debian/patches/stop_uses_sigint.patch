@@ -1,0 +1,31 @@
+systemd wants to be killed by SIGINT
+
+diff --git a/daemon/container.go b/daemon/container.go
+index 778a01c..83488c2 100644
+--- a/daemon/container.go
++++ b/daemon/container.go
+@@ -762,6 +762,16 @@ func (container *Container) Stop(seconds int) error {
+ 		return nil
+ 	}
+ 
++	// 1. Send a SIGINT
++	if err := container.killPossiblyDeadProcess(2); err != nil {
++		log.Infof("Failed to send SIGINT to the process, force killing")
++		if err := container.killPossiblyDeadProcess(9); err != nil {
++			return err
++		}
++	}
++
++if _, err := container.WaitStop(time.Duration(seconds) * time.Second); err != nil {
++	log.Infof("Container %v failed to exit within %d seconds of SIGINT - trying SIGTERM", container.ID, seconds)
+ 	// 1. Send a SIGTERM
+ 	if err := container.killPossiblyDeadProcess(15); err != nil {
+ 		log.Infof("Failed to send SIGTERM to the process, force killing")
+@@ -769,6 +779,7 @@ func (container *Container) Stop(seconds int) error {
+ 			return err
+ 		}
+ 	}
++}
+ 
+ 	// 2. Wait for the process to exit on its own
+ 	if _, err := container.WaitStop(time.Duration(seconds) * time.Second); err != nil {

@@ -1,4 +1,5 @@
 inspect-env.patch
+stop_uses_sigint.patch
 mount_cgroups.patch
 
 # https://github.com/docker/docker/pull/12048!
