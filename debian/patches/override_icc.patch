@@ -1,0 +1,143 @@
+Add Feature to override ICC restrictions per container
+and set source IP of outgoing communication
+
+diff --git a/daemon/container.go b/daemon/container.go
+index 778a01c..99d574a 100644
+--- a/daemon/container.go
++++ b/daemon/container.go
+@@ -537,6 +537,20 @@ func (container *Container) AllocateNetwork() error {
+ 
+ 	job := eng.Job("allocate_interface", container.ID)
+ 	job.Setenv("RequestedMac", container.Config.MacAddress)
++
++	if container.Config.Env != nil {
++		for _, v := range container.Config.Env {
++			parts := strings.Split(v, "=")
++			if len(parts) == 2 {
++				if parts[0] == "ICC_OVERRIDE" && parts[1] != "" && parts[1] != "0" && parts[1] != "false" {
++					job.SetenvBool("OverrideICC", true)
++				} else if parts[0] == "SNAT" {
++					job.Setenv("SourceNAT", parts[1])
++				}
++			}
++		}
++	}
++
+ 	if env, err = job.Stdout.AddEnv(); err != nil {
+ 		return err
+ 	}
+diff --git a/daemon/networkdriver/bridge/driver.go b/daemon/networkdriver/bridge/driver.go
+index 0d6bc07..e6f2acc 100644
+--- a/daemon/networkdriver/bridge/driver.go
++++ b/daemon/networkdriver/bridge/driver.go
+@@ -32,6 +32,8 @@ type networkInterface struct {
+ 	IP           net.IP
+ 	IPv6         net.IP
+ 	PortMappings []net.Addr // There are mappings to the host interfaces
++	OverrideICC  bool
++	SourceNAT    net.IP
+ }
+ 
+ type ifaces struct {
+@@ -521,6 +523,8 @@ func Allocate(job *engine.Job) engine.Status {
+ 		requestedIP   = net.ParseIP(job.Getenv("RequestedIP"))
+ 		requestedIPv6 = net.ParseIP(job.Getenv("RequestedIPv6"))
+ 		globalIPv6    net.IP
++		overrideICC   = job.GetenvBool("OverrideICC")
++		sourceNAT     = net.ParseIP(job.Getenv("SourceNAT"))
+ 	)
+ 
+ 	ip, err = ipallocator.RequestIP(bridgeIPv4Network, requestedIP)
+@@ -578,9 +582,26 @@ func Allocate(job *engine.Job) engine.Status {
+ 		out.Set("IPv6Gateway", bridgeIPv6Addr.String())
+ 	}
+ 
++	out.SetBool("OverrideICC", overrideICC)
++	if overrideICC {
++		if err := iptables.OverrideICC(iptables.Append, bridgeIface, ip); err != nil {
++			return job.Error(err)
++		}
++	}
++
++	out.Set("SourceNAT", sourceNAT.String())
++	if sourceNAT != nil {
++		if err := iptables.SourceNAT(iptables.Insert, bridgeIface, ip, sourceNAT); err != nil {
++			iptables.OverrideICC(iptables.Delete, bridgeIface, ip)
++			return job.Error(err)
++		}
++	}
++
+ 	currentInterfaces.Set(id, &networkInterface{
+ 		IP:   ip,
+ 		IPv6: globalIPv6,
++		OverrideICC: overrideICC,
++		SourceNAT: sourceNAT,
+ 	})
+ 
+ 	out.WriteTo(job.Stdout)
+@@ -599,6 +620,14 @@ func Release(job *engine.Job) engine.Status {
+ 		return job.Errorf("No network information to release for %s", id)
+ 	}
+ 
++	if containerInterface.OverrideICC {
++		iptables.OverrideICC(iptables.Delete, bridgeIface, containerInterface.IP)
++	}
++
++	if containerInterface.SourceNAT != nil {
++		iptables.SourceNAT(iptables.Delete, bridgeIface, containerInterface.IP, containerInterface.SourceNAT)
++	}
++
+ 	for _, nat := range containerInterface.PortMappings {
+ 		if err := portMapper.Unmap(nat); err != nil {
+ 			log.Infof("Unable to unmap port %s: %s", nat, err)
+diff --git a/pkg/iptables/iptables.go b/pkg/iptables/iptables.go
+index 3e083a4..98c690b 100644
+--- a/pkg/iptables/iptables.go
++++ b/pkg/iptables/iptables.go
+@@ -171,6 +171,46 @@ func (c *Chain) Forward(action Action, ip net.IP, port int, proto, destAddr stri
+ 	return nil
+ }
+ 
++// Add SNAT rule to 'nat' table, setting source IP address.
++// Action should be Insert when adding the rule, order matters here.
++func SourceNAT(action Action, bridge string, ip, srcAddr net.IP) error {
++	if output, err := Raw("-t", string(Nat), string(action), "POSTROUTING",
++		"!", "-o", bridge,
++		"-s", ip.String(),
++		"-j", "SNAT",
++		"--to-source", srcAddr.String()); err != nil {
++		return err
++	} else if len(output) != 0 {
++		return fmt.Errorf("Error iptables snat: %s", output)
++	}
++
++	return nil
++}
++
++// Add ACCEPT rule for the supplied IP addresses, which will
++// then be permitted to connect to all other containers.
++func OverrideICC(action Action, bridge string, ip net.IP) error {
++	if output, err := Raw("-t", string(Filter), string(action), "DOCKER",
++		"-i", bridge, "-o", bridge,
++		"-s", ip.String(),
++		"-j", "ACCEPT"); err != nil {
++		return err
++	} else if len(output) != 0 {
++		return fmt.Errorf("Error iptables forward: %s", output)
++	}
++	if output, err := Raw("-t", string(Filter), string(action), "DOCKER",
++		"-i", bridge, "-o", bridge,
++		"-d", ip.String(),
++		"-m", "conntrack",
++		"--ctstate", "RELATED,ESTABLISHED",
++		"-j", "ACCEPT"); err != nil {
++		return err
++	} else if len(output) != 0 {
++		return fmt.Errorf("Error iptables forward: %s", output)
++	}
++	return nil
++}
++
+ // Add reciprocal ACCEPT rule for two supplied IP addresses.
+ // Traffic is allowed from ip1 to ip2 and vice-versa
+ func (c *Chain) Link(action Action, ip1, ip2 net.IP, port int, proto string) error {

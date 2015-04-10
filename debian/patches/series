@@ -1,6 +1,7 @@
 inspect-env.patch
 stop_uses_sigint.patch
 mount_cgroups.patch
+override_icc.patch
 
 # https://github.com/docker/docker/pull/12048!
 12048-auto-btrfs_noversion.patch
